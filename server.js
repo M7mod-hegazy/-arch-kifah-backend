@@ -216,8 +216,8 @@ app.post('/api/projects', (req, res) => {
       history: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      createdBy: projectData.createdBy || 'current-user',
-      updatedBy: projectData.updatedBy || 'current-user'
+      createdBy: projectData.createdBy || 'مستخدم النظام',
+      updatedBy: projectData.updatedBy || 'مستخدم النظام'
     };
 
     console.log('Created project object:', {
