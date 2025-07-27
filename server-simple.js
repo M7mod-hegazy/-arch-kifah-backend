@@ -67,10 +67,25 @@ app.get('/api/projects', (req, res) => {
     data: [
       {
         id: '1',
-        name: 'Test Project',
-        description: 'This is a test project',
-        status: 'active',
-        createdAt: new Date().toISOString()
+        title: 'مشروع تجريبي',
+        description: 'هذا مشروع تجريبي للاختبار',
+        status: 'waiting',
+        totalCost: 50000,
+        originalCost: 45000,
+        startDate: new Date().toISOString(),
+        endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        customer: {
+          name: 'عميل تجريبي',
+          phone: '01234567890',
+          address: 'عنوان تجريبي'
+        },
+        subgoals: [],
+        images: [],
+        history: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: 'test-user',
+        updatedBy: 'test-user'
       }
     ],
     message: 'Projects retrieved successfully'
