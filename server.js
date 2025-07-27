@@ -33,6 +33,7 @@ const allowedOrigins = [
   'http://localhost:8080',
   'http://localhost:8081',
   'http://localhost:8082',
+  'https://arch-kifah.vercel.app',
   process.env.FRONTEND_URL
 ].filter(Boolean);
 
