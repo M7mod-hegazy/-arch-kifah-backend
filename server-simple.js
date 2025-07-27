@@ -57,9 +57,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Body parsing with error handling
+// Body parsing with error handling - increased limit for images
 app.use(express.json({
-  limit: '1mb',
+  limit: '10mb', // Increased for image uploads
   verify: (req, res, buf) => {
     try {
       JSON.parse(buf);
@@ -73,7 +73,7 @@ app.use(express.json({
     }
   }
 }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -157,11 +157,16 @@ app.get('/api/projects/:id', (req, res) => {
   }
 });
 
-// Create project endpoint
+// Create project endpoint with timeout handling
 app.post('/api/projects', (req, res) => {
+  // Set longer timeout for image uploads
+  req.setTimeout(30000); // 30 seconds
   try {
     const projectData = req.body;
-    console.log('POST /api/projects - Received data:', JSON.stringify(projectData, null, 2));
+    const requestSize = JSON.stringify(projectData).length;
+    console.log('POST /api/projects - Request size:', requestSize, 'bytes');
+    console.log('POST /api/projects - Project title:', projectData.title);
+    console.log('POST /api/projects - Images count:', projectData.images?.length || 0);
 
     // Validate required fields
     if (!projectData.title || !projectData.customer) {
@@ -171,6 +176,25 @@ app.post('/api/projects', (req, res) => {
         message: 'Missing required fields: title and customer are required'
       });
     }
+
+    // Handle images safely
+    let processedImages = [];
+    if (Array.isArray(projectData.images)) {
+      processedImages = projectData.images.map((img, index) => {
+        // Ensure each image has required fields
+        return {
+          id: img.id || `img_${Date.now()}_${index}`,
+          url: img.url || '',
+          thumbnail: img.thumbnail || img.url || '',
+          filename: img.filename || `image_${index + 1}`,
+          size: img.size || 0,
+          uploadedAt: img.uploadedAt || new Date().toISOString(),
+          uploadedBy: img.uploadedBy || 'current-user'
+        };
+      });
+    }
+
+    console.log(`Processing ${processedImages.length} images for new project`);
 
     // Create new project with safe defaults
     const newProject = {
@@ -188,7 +212,7 @@ app.post('/api/projects', (req, res) => {
         address: projectData.customer?.address || ''
       },
       subgoals: Array.isArray(projectData.subgoals) ? projectData.subgoals : [],
-      images: Array.isArray(projectData.images) ? projectData.images : [],
+      images: processedImages,
       history: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
