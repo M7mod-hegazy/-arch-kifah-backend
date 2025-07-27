@@ -9,30 +9,10 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // In-memory storage for projects (will reset on server restart)
-let projects = [
-  {
-    id: '1',
-    title: 'مشروع تجريبي',
-    description: 'هذا مشروع تجريبي للاختبار',
-    status: 'waiting',
-    totalCost: 50000,
-    originalCost: 45000,
-    startDate: new Date().toISOString(),
-    endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-    customer: {
-      name: 'عميل تجريبي',
-      phone: '01234567890',
-      address: 'عنوان تجريبي'
-    },
-    subgoals: [],
-    images: [],
-    history: [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    createdBy: 'test-user',
-    updatedBy: 'test-user'
-  }
-];
+// Starting with empty array to avoid ID conflicts
+let projects = [];
+
+console.log('Backend initialized with empty projects array');
 
 // Ultra-simple CORS that definitely works
 app.use((req, res, next) => {
@@ -216,8 +196,8 @@ app.post('/api/projects', (req, res) => {
       history: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      createdBy: projectData.createdBy || 'current-user',
-      updatedBy: projectData.updatedBy || 'current-user'
+      createdBy: projectData.createdBy || 'مستخدم النظام',
+      updatedBy: projectData.updatedBy || 'مستخدم النظام'
     };
 
     console.log('Created project object:', {
@@ -255,15 +235,23 @@ app.put('/api/projects/:id', (req, res) => {
     const projectId = req.params.id;
     const updates = req.body;
     console.log(`PUT /api/projects/${projectId} - Updating project`);
+    console.log('Current projects count:', projects.length);
+    console.log('Available project IDs:', projects.map(p => p.id));
     console.log('Updates received:', JSON.stringify(updates, null, 2));
 
     const projectIndex = projects.findIndex(p => p.id === projectId);
 
     if (projectIndex === -1) {
       console.log(`Project ${projectId} not found`);
+      console.log('Available projects:', projects.map(p => ({ id: p.id, title: p.title })));
       return res.status(404).json({
         success: false,
-        message: 'Project not found'
+        message: 'Project not found',
+        debug: {
+          requestedId: projectId,
+          availableIds: projects.map(p => p.id),
+          projectsCount: projects.length
+        }
       });
     }
 
