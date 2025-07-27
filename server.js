@@ -57,8 +57,22 @@ app.use((req, res, next) => {
   next();
 });
 
-// Body parsing
-app.use(express.json({ limit: '1mb' }));
+// Body parsing with error handling
+app.use(express.json({
+  limit: '1mb',
+  verify: (req, res, buf) => {
+    try {
+      JSON.parse(buf);
+    } catch (e) {
+      console.error('Invalid JSON received:', e.message);
+      res.status(400).json({
+        success: false,
+        message: 'Invalid JSON format'
+      });
+      return;
+    }
+  }
+}));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Root endpoint
@@ -85,6 +99,18 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'OK',
     message: 'API is healthy',
+    timestamp: new Date().toISOString(),
+    projectsCount: projects.length
+  });
+});
+
+// Test endpoint for debugging
+app.post('/api/test', (req, res) => {
+  console.log('Test endpoint called with body:', req.body);
+  res.json({
+    success: true,
+    message: 'Test endpoint working',
+    receivedData: req.body,
     timestamp: new Date().toISOString()
   });
 });
@@ -135,17 +161,47 @@ app.get('/api/projects/:id', (req, res) => {
 app.post('/api/projects', (req, res) => {
   try {
     const projectData = req.body;
-    console.log('POST /api/projects - Creating project:', projectData.title);
+    console.log('POST /api/projects - Received data:', JSON.stringify(projectData, null, 2));
 
+    // Validate required fields
+    if (!projectData.title || !projectData.customer) {
+      console.error('Missing required fields:', { title: projectData.title, customer: projectData.customer });
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: title and customer are required'
+      });
+    }
+
+    // Create new project with safe defaults
     const newProject = {
       id: Date.now().toString(),
-      ...projectData,
-      subgoals: projectData.subgoals || [],
-      images: projectData.images || [],
+      title: projectData.title || 'مشروع جديد',
+      description: projectData.description || '',
+      status: projectData.status || 'waiting',
+      totalCost: Number(projectData.totalCost) || 0,
+      originalCost: Number(projectData.originalCost) || Number(projectData.totalCost) || 0,
+      startDate: projectData.startDate || new Date().toISOString(),
+      endDate: projectData.endDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      customer: {
+        name: projectData.customer?.name || 'عميل جديد',
+        phone: projectData.customer?.phone || '',
+        address: projectData.customer?.address || ''
+      },
+      subgoals: Array.isArray(projectData.subgoals) ? projectData.subgoals : [],
+      images: Array.isArray(projectData.images) ? projectData.images : [],
       history: [],
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      createdBy: projectData.createdBy || 'current-user',
+      updatedBy: projectData.updatedBy || 'current-user'
     };
+
+    console.log('Created project object:', {
+      id: newProject.id,
+      title: newProject.title,
+      totalCost: newProject.totalCost,
+      customer: newProject.customer.name
+    });
 
     // Add to in-memory storage
     projects.push(newProject);
@@ -159,10 +215,12 @@ app.post('/api/projects', (req, res) => {
     });
   } catch (error) {
     console.error('Error creating project:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
       message: 'Failed to create project',
-      error: error.message
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
