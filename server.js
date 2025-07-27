@@ -74,6 +74,29 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use('/test', express.static('public'));
 app.use('/test', express.static('.'));
 
+// Root endpoint
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    message: 'Architecture Reminder Backend Server is running',
+    timestamp: new Date().toISOString(),
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development',
+    routes: [
+      'GET /',
+      'GET /health',
+      'GET /api/health',
+      'GET /api/projects',
+      'POST /api/projects',
+      'PUT /api/projects/:id',
+      'DELETE /api/projects/:id',
+      'GET /api/users',
+      'POST /api/users',
+      'POST /api/images/upload'
+    ]
+  });
+});
+
 // Health check endpoints
 app.get('/health', (req, res) => {
   res.status(200).json({
