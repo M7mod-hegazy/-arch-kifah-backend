@@ -72,6 +72,7 @@ app.get('/', (req, res) => {
       'GET /',
       'GET /api/health',
       'GET /api/projects',
+      'GET /api/projects/:id',
       'POST /api/projects',
       'PUT /api/projects/:id',
       'DELETE /api/projects/:id'
@@ -96,6 +97,38 @@ app.get('/api/projects', (req, res) => {
     data: projects,
     message: 'Projects retrieved successfully'
   });
+});
+
+// Get single project by ID
+app.get('/api/projects/:id', (req, res) => {
+  try {
+    const projectId = req.params.id;
+    console.log(`GET /api/projects/${projectId} - Getting single project`);
+
+    const project = projects.find(p => p.id === projectId);
+
+    if (!project) {
+      console.log(`Project ${projectId} not found`);
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
+    }
+
+    console.log(`Project ${projectId} found and returned`);
+    res.json({
+      success: true,
+      data: project,
+      message: 'Project retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error getting project:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get project',
+      error: error.message
+    });
+  }
 });
 
 // Create project endpoint
@@ -140,28 +173,52 @@ app.put('/api/projects/:id', (req, res) => {
     const projectId = req.params.id;
     const updates = req.body;
     console.log(`PUT /api/projects/${projectId} - Updating project`);
+    console.log('Updates received:', JSON.stringify(updates, null, 2));
 
     const projectIndex = projects.findIndex(p => p.id === projectId);
 
     if (projectIndex === -1) {
+      console.log(`Project ${projectId} not found`);
       return res.status(404).json({
         success: false,
         message: 'Project not found'
       });
     }
 
-    // Update the project
+    const originalProject = projects[projectIndex];
+    console.log('Original project before update:', {
+      id: originalProject.id,
+      title: originalProject.title,
+      totalCost: originalProject.totalCost,
+      subgoalsCount: originalProject.subgoals?.length || 0,
+      imagesCount: originalProject.images?.length || 0
+    });
+
+    // Update the project with proper merging
     projects[projectIndex] = {
-      ...projects[projectIndex],
+      ...originalProject,
       ...updates,
+      // Ensure arrays are properly handled
+      subgoals: updates.subgoals || originalProject.subgoals || [],
+      images: updates.images || originalProject.images || [],
+      history: updates.history || originalProject.history || [],
       updatedAt: new Date().toISOString()
     };
+
+    const updatedProject = projects[projectIndex];
+    console.log('Updated project after merge:', {
+      id: updatedProject.id,
+      title: updatedProject.title,
+      totalCost: updatedProject.totalCost,
+      subgoalsCount: updatedProject.subgoals?.length || 0,
+      imagesCount: updatedProject.images?.length || 0
+    });
 
     console.log(`Project ${projectId} updated successfully`);
 
     res.json({
       success: true,
-      data: projects[projectIndex],
+      data: updatedProject,
       message: 'Project updated successfully'
     });
   } catch (error) {
