@@ -14,26 +14,30 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Very permissive CORS for Vercel
+// CORS configuration with specific origins
+const allowedOrigins = [
+  'https://arch-kifah.vercel.app',
+  'http://localhost:8080',
+  'http://localhost:8081',
+  'http://localhost:8082'
+];
+
 app.use(cors({
-  origin: true,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, etc.)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Fallback - allow any origin for now
+    return callback(null, true);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['*']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
-
-// Additional CORS headers
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', '*');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
 
 // Body parsing middleware - very small limits for Vercel
 app.use(express.json({ limit: '1mb' }));
