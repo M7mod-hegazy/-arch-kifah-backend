@@ -23,10 +23,19 @@ async function connectToMongoDB() {
     }
 
     console.log('🔄 Attempting to connect to MongoDB...');
-    console.log('🔗 MongoDB URI:', MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//***:***@')); // Hide credentials in logs
+    console.log('🔗 MongoDB URI length:', MONGODB_URI.length);
+    console.log('🔗 MongoDB URI preview:', MONGODB_URI.substring(0, 30) + '...');
 
-    client = new MongoClient(MONGODB_URI);
+    // Try connection with timeout options for Vercel
+    client = new MongoClient(MONGODB_URI, {
+      serverSelectionTimeoutMS: 10000, // 10 seconds
+      connectTimeoutMS: 10000,
+      socketTimeoutMS: 10000,
+    });
+
+    console.log('🔄 Attempting client.connect()...');
     await client.connect();
+    console.log('✅ Client connected successfully');
     db = client.db(); // Use database from URI
     console.log('✅ Connected to MongoDB successfully');
 
