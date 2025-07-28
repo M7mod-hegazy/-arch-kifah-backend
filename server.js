@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { MongoClient, ObjectId } from 'mongodb';
 
 // Load environment variables
 dotenv.config();
@@ -8,11 +9,35 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// In-memory storage for projects (will reset on server restart)
-// Starting with empty array to avoid ID conflicts
-let projects = [];
+// MongoDB connection
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://m7mod:275757@cluster0.lht612f.mongodb.net/arch_kifah?retryWrites=true&w=majority&appName=Cluster0';
+let db;
+let client;
 
-console.log('Backend initialized with empty projects array');
+// Connect to MongoDB
+async function connectToMongoDB() {
+  try {
+    client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    db = client.db('arch_kifah');
+    console.log('✅ Connected to MongoDB successfully');
+
+    // Test the connection
+    await db.admin().ping();
+    console.log('✅ MongoDB ping successful');
+
+    return true;
+  } catch (error) {
+    console.error('❌ MongoDB connection failed:', error);
+    return false;
+  }
+}
+
+// Initialize MongoDB connection
+connectToMongoDB();
+
+// MongoDB collections will be used instead of in-memory storage
+console.log('Backend initialized with MongoDB integration');
 
 // Ultra-simple CORS that definitely works
 app.use((req, res, next) => {
@@ -75,13 +100,30 @@ app.get('/', (req, res) => {
 });
 
 // Health check
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'OK',
-    message: 'API is healthy',
-    timestamp: new Date().toISOString(),
-    projectsCount: projects.length
-  });
+app.get('/api/health', async (req, res) => {
+  try {
+    let projectsCount = 0;
+    if (db) {
+      projectsCount = await db.collection('projects').countDocuments();
+    }
+
+    res.json({
+      status: 'OK',
+      message: 'API is healthy',
+      timestamp: new Date().toISOString(),
+      database: db ? 'Connected' : 'Disconnected',
+      projectsCount: projectsCount
+    });
+  } catch (error) {
+    res.json({
+      status: 'OK',
+      message: 'API is healthy (database error)',
+      timestamp: new Date().toISOString(),
+      database: 'Error',
+      projectsCount: 0,
+      error: error.message
+    });
+  }
 });
 
 // Test endpoint for debugging
@@ -95,50 +137,286 @@ app.post('/api/test', (req, res) => {
   });
 });
 
-// Get all projects
-app.get('/api/projects', (req, res) => {
-  console.log(`GET /api/projects - Returning ${projects.length} projects`);
-  res.json({
-    success: true,
-    data: projects,
-    message: 'Projects retrieved successfully'
-  });
+// ===== AUTHENTICATION ENDPOINTS =====
+
+// Register new user
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+
+    console.log('POST /api/auth/register - Registering user:', email);
+
+    // Validate input
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'الاسم والبريد الإلكتروني وكلمة المرور مطلوبة'
+      });
+    }
+
+    // Check if MongoDB is connected
+    if (!db) {
+      return res.status(500).json({
+        success: false,
+        message: 'خطأ في الاتصال بقاعدة البيانات'
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await db.collection('users').findOne({
+      email: email.toLowerCase().trim()
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'هذا البريد الإلكتروني مسجل بالفعل'
+      });
+    }
+
+    // Create new user
+    const newUser = {
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      password: password, // In production, hash this!
+      companyId: 'arch_kifah_company',
+      role: 'user',
+      createdAt: new Date().toISOString(),
+      avatar: null
+    };
+
+    // Insert user into MongoDB
+    const result = await db.collection('users').insertOne(newUser);
+
+    // Return user without password
+    const { password: _, ...userWithoutPassword } = {
+      ...newUser,
+      id: result.insertedId.toString()
+    };
+
+    console.log('User registered successfully:', userWithoutPassword.email);
+
+    res.json({
+      success: true,
+      message: 'تم إنشاء الحساب بنجاح',
+      data: {
+        user: userWithoutPassword,
+        token: `token_${result.insertedId}_${Date.now()}`
+      }
+    });
+
+  } catch (error) {
+    console.error('Error registering user:', error);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ أثناء إنشاء الحساب'
+    });
+  }
+});
+
+// Login user
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    console.log('POST /api/auth/login - Login attempt for:', email);
+
+    // Validate input
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'البريد الإلكتروني وكلمة المرور مطلوبان'
+      });
+    }
+
+    // Check if MongoDB is connected
+    if (!db) {
+      return res.status(500).json({
+        success: false,
+        message: 'خطأ في الاتصال بقاعدة البيانات'
+      });
+    }
+
+    // Find user in MongoDB
+    const user = await db.collection('users').findOne({
+      email: email.toLowerCase().trim()
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة'
+      });
+    }
+
+    // Check password (in production, use bcrypt)
+    if (user.password !== password) {
+      return res.status(401).json({
+        success: false,
+        message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة'
+      });
+    }
+
+    // Return user without password
+    const { password: _, ...userWithoutPassword } = {
+      ...user,
+      id: user._id.toString()
+    };
+
+    console.log('User logged in successfully:', userWithoutPassword.email);
+
+    res.json({
+      success: true,
+      message: 'تم تسجيل الدخول بنجاح',
+      data: {
+        user: userWithoutPassword,
+        token: `token_${user._id}_${Date.now()}`
+      }
+    });
+
+  } catch (error) {
+    console.error('Error logging in user:', error);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ أثناء تسجيل الدخول'
+    });
+  }
+});
+
+// Get all users (for debugging)
+app.get('/api/auth/users', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection not available'
+      });
+    }
+
+    const users = await db.collection('users').find({}, {
+      projection: { password: 0 } // Exclude password field
+    }).toArray();
+
+    const usersWithId = users.map(user => ({
+      ...user,
+      id: user._id.toString()
+    }));
+
+    res.json({
+      success: true,
+      data: usersWithId,
+      count: users.length
+    });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch users'
+    });
+  }
+});
+
+// Get all projects - SHARED ACROSS ALL USERS
+app.get('/api/projects', async (req, res) => {
+  try {
+    console.log('GET /api/projects - Fetching shared projects from MongoDB');
+
+    if (!db) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection not available'
+      });
+    }
+
+    // Get all projects from MongoDB (shared across all users)
+    const projects = await db.collection('projects').find({}).toArray();
+
+    // Format projects with proper ID field
+    const formattedProjects = projects.map(project => ({
+      ...project,
+      id: project._id.toString(),
+      subgoals: project.subgoals || [],
+      images: project.images || [],
+      history: project.history || [],
+      companyId: project.companyId || 'arch_kifah_company'
+    }));
+
+    console.log(`Returning ${formattedProjects.length} shared projects`);
+
+    res.json({
+      success: true,
+      data: formattedProjects,
+      count: formattedProjects.length,
+      message: 'Shared projects retrieved successfully'
+    });
+
+  } catch (error) {
+    console.error('Error fetching projects from MongoDB:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch projects',
+      error: error.message
+    });
+  }
 });
 
 // Get single project by ID
-app.get('/api/projects/:id', (req, res) => {
+app.get('/api/projects/:id', async (req, res) => {
   try {
     const projectId = req.params.id;
-    console.log(`GET /api/projects/${projectId} - Getting single project`);
+    console.log(`GET /api/projects/${projectId} - Getting single project from MongoDB`);
 
-    const project = projects.find(p => p.id === projectId);
+    if (!db) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection not available'
+      });
+    }
+
+    // Try to find by MongoDB ObjectId first, then by string ID
+    let project;
+    try {
+      project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });
+    } catch (e) {
+      // If ObjectId fails, try string ID
+      project = await db.collection('projects').findOne({ id: projectId });
+    }
 
     if (!project) {
-      console.log(`Project ${projectId} not found`);
+      console.log(`Project ${projectId} not found in MongoDB`);
       return res.status(404).json({
         success: false,
         message: 'Project not found'
       });
     }
 
-    console.log(`Project ${projectId} found and returned`);
+    // Format project with proper ID
+    const formattedProject = {
+      ...project,
+      id: project._id.toString(),
+      subgoals: project.subgoals || [],
+      images: project.images || [],
+      history: project.history || []
+    };
+
+    console.log(`Project ${projectId} found in MongoDB`);
     res.json({
       success: true,
-      data: project,
+      data: formattedProject,
       message: 'Project retrieved successfully'
     });
   } catch (error) {
-    console.error('Error getting project:', error);
+    console.error('Error fetching project from MongoDB:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get project',
+      message: 'Failed to fetch project',
       error: error.message
     });
   }
 });
 
 // Create project endpoint with timeout handling
-app.post('/api/projects', (req, res) => {
+app.post('/api/projects', async (req, res) => {
   // Set longer timeout for image uploads
   req.setTimeout(30000); // 30 seconds
   try {
@@ -147,6 +425,13 @@ app.post('/api/projects', (req, res) => {
     console.log('POST /api/projects - Request size:', requestSize, 'bytes');
     console.log('POST /api/projects - Project title:', projectData.title);
     console.log('POST /api/projects - Images count:', projectData.images?.length || 0);
+
+    if (!db) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection not available'
+      });
+    }
 
     // Validate required fields
     if (!projectData.title || !projectData.customer) {
@@ -207,15 +492,22 @@ app.post('/api/projects', (req, res) => {
       customer: newProject.customer.name
     });
 
-    // Add to in-memory storage
-    projects.push(newProject);
+    // Save to MongoDB instead of in-memory storage
+    const result = await db.collection('projects').insertOne(newProject);
 
-    console.log(`Project created successfully. Total projects: ${projects.length}`);
+    // Format response with MongoDB ID
+    const savedProject = {
+      ...newProject,
+      id: result.insertedId.toString(),
+      _id: result.insertedId
+    };
+
+    console.log(`Project saved to MongoDB successfully. ID: ${result.insertedId}`);
 
     res.json({
       success: true,
-      data: newProject,
-      message: 'Project created successfully'
+      data: savedProject,
+      message: 'Project created and saved to database successfully'
     });
   } catch (error) {
     console.error('Error creating project:', error);
@@ -230,53 +522,58 @@ app.post('/api/projects', (req, res) => {
 });
 
 // Update project endpoint
-app.put('/api/projects/:id', (req, res) => {
+app.put('/api/projects/:id', async (req, res) => {
   try {
     const projectId = req.params.id;
     const updates = req.body;
-    console.log(`PUT /api/projects/${projectId} - Updating project`);
-    console.log('Current projects count:', projects.length);
-    console.log('Available project IDs:', projects.map(p => p.id));
+    console.log(`PUT /api/projects/${projectId} - Updating project in MongoDB`);
     console.log('Updates received:', JSON.stringify(updates, null, 2));
 
-    const projectIndex = projects.findIndex(p => p.id === projectId);
+    if (!db) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection not available'
+      });
+    }
 
-    if (projectIndex === -1) {
-      console.log(`Project ${projectId} not found`);
-      console.log('Available projects:', projects.map(p => ({ id: p.id, title: p.title })));
+    // Try to find and update by MongoDB ObjectId first, then by string ID
+    let result;
+    try {
+      result = await db.collection('projects').findOneAndUpdate(
+        { _id: new ObjectId(projectId) },
+        { $set: { ...updates, updatedAt: new Date().toISOString() } },
+        { returnDocument: 'after' }
+      );
+    } catch (e) {
+      // If ObjectId fails, try string ID
+      result = await db.collection('projects').findOneAndUpdate(
+        { id: projectId },
+        { $set: { ...updates, updatedAt: new Date().toISOString() } },
+        { returnDocument: 'after' }
+      );
+    }
+
+    if (!result.value) {
+      console.log(`Project ${projectId} not found in MongoDB`);
       return res.status(404).json({
         success: false,
         message: 'Project not found',
         debug: {
           requestedId: projectId,
-          availableIds: projects.map(p => p.id),
-          projectsCount: projects.length
         }
       });
     }
 
-    const originalProject = projects[projectIndex];
-    console.log('Original project before update:', {
-      id: originalProject.id,
-      title: originalProject.title,
-      totalCost: originalProject.totalCost,
-      subgoalsCount: originalProject.subgoals?.length || 0,
-      imagesCount: originalProject.images?.length || 0
-    });
-
-    // Update the project with proper merging
-    projects[projectIndex] = {
-      ...originalProject,
-      ...updates,
-      // Ensure arrays are properly handled
-      subgoals: updates.subgoals || originalProject.subgoals || [],
-      images: updates.images || originalProject.images || [],
-      history: updates.history || originalProject.history || [],
-      updatedAt: new Date().toISOString()
+    // Format the updated project
+    const updatedProject = {
+      ...result.value,
+      id: result.value._id.toString(),
+      subgoals: result.value.subgoals || [],
+      images: result.value.images || [],
+      history: result.value.history || []
     };
 
-    const updatedProject = projects[projectIndex];
-    console.log('Updated project after merge:', {
+    console.log('Updated project in MongoDB:', {
       id: updatedProject.id,
       title: updatedProject.title,
       totalCost: updatedProject.totalCost,
@@ -284,7 +581,7 @@ app.put('/api/projects/:id', (req, res) => {
       imagesCount: updatedProject.images?.length || 0
     });
 
-    console.log(`Project ${projectId} updated successfully`);
+    console.log(`Project ${projectId} updated successfully in MongoDB`);
 
     res.json({
       success: true,
@@ -302,28 +599,40 @@ app.put('/api/projects/:id', (req, res) => {
 });
 
 // Delete project endpoint
-app.delete('/api/projects/:id', (req, res) => {
+app.delete('/api/projects/:id', async (req, res) => {
   try {
     const projectId = req.params.id;
-    console.log(`DELETE /api/projects/${projectId} - Deleting project`);
+    console.log(`DELETE /api/projects/${projectId} - Deleting project from MongoDB`);
 
-    const projectIndex = projects.findIndex(p => p.id === projectId);
+    if (!db) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection not available'
+      });
+    }
 
-    if (projectIndex === -1) {
+    // Try to delete by MongoDB ObjectId first, then by string ID
+    let result;
+    try {
+      result = await db.collection('projects').deleteOne({ _id: new ObjectId(projectId) });
+    } catch (e) {
+      // If ObjectId fails, try string ID
+      result = await db.collection('projects').deleteOne({ id: projectId });
+    }
+
+    if (result.deletedCount === 0) {
+      console.log(`Project ${projectId} not found in MongoDB`);
       return res.status(404).json({
         success: false,
         message: 'Project not found'
       });
     }
 
-    // Remove the project
-    projects.splice(projectIndex, 1);
-
-    console.log(`Project ${projectId} deleted successfully. Remaining: ${projects.length}`);
+    console.log(`Project ${projectId} deleted successfully from MongoDB`);
 
     res.json({
       success: true,
-      message: 'Project deleted successfully'
+      message: 'Project deleted successfully from database'
     });
   } catch (error) {
     console.error('Error deleting project:', error);
