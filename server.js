@@ -26,13 +26,9 @@ async function connectToMongoDB() {
     console.log('🔗 MongoDB URI length:', MONGODB_URI.length);
     console.log('🔗 MongoDB URI preview:', MONGODB_URI.substring(0, 30) + '...');
 
-    // Try alternative connection string format for Vercel
+    // Try original connection string without modification
     let connectionString = MONGODB_URI;
-    if (!connectionString.includes('/arch-kifah')) {
-      // Add database name if not present
-      connectionString = connectionString.replace('mongodb.net/', 'mongodb.net/arch-kifah');
-      console.log('🔄 Modified connection string to include database name');
-    }
+    console.log('🔄 Using original connection string format');
 
     // Try multiple connection strategies for Vercel
     const connectionOptions = {
@@ -51,10 +47,10 @@ async function connectToMongoDB() {
     await client.connect();
     console.log('✅ Client connected successfully');
 
-    // Try different database name strategies
-    let dbName = 'arch-kifah';
-    console.log('🔄 Attempting to select database:', dbName);
-    db = client.db(dbName);
+    // Always use explicit database name
+    console.log('🔄 Selecting database: arch-kifah');
+    db = client.db('arch-kifah');
+    console.log('🔄 Database selected successfully');
     console.log('✅ Connected to MongoDB successfully');
 
     // Test the connection
