@@ -621,11 +621,27 @@ app.post('/api/projects', async (req, res) => {
 
 // Update project endpoint
 app.put('/api/projects/:id', async (req, res) => {
+  // Set longer timeout for large updates
+  req.setTimeout(60000); // 60 seconds
+
   try {
     const projectId = req.params.id;
     const updates = req.body;
+    const requestSize = JSON.stringify(updates).length;
     console.log(`PUT /api/projects/${projectId} - Updating project in MongoDB`);
-    console.log('Updates received:', JSON.stringify(updates, null, 2));
+    console.log('Request size:', requestSize, 'bytes');
+
+    // Check if request is too large for Vercel (4.5MB limit)
+    if (requestSize > 4 * 1024 * 1024) { // 4MB threshold
+      return res.status(413).json({
+        success: false,
+        message: 'Request too large. Please reduce image sizes or remove some images.',
+        requestSize: requestSize,
+        maxSize: '4MB'
+      });
+    }
+
+    console.log('Updates received keys:', Object.keys(updates));
 
     if (!db) {
       return res.status(500).json({
