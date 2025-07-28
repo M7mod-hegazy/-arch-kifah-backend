@@ -97,12 +97,16 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.get('/', (req, res) => {
   res.json({
     status: 'OK',
-    message: 'Arch Kifah Backend API - Simple Version',
+    message: 'Arch Kifah Backend API with MongoDB & Auth',
     timestamp: new Date().toISOString(),
     cors: 'enabled',
+    database: db ? 'Connected' : 'Disconnected',
     routes: [
       'GET /',
       'GET /api/health',
+      'POST /api/auth/register',
+      'POST /api/auth/login',
+      'GET /api/auth/users',
       'GET /api/projects',
       'GET /api/projects/:id',
       'POST /api/projects',
