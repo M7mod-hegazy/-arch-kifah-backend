@@ -729,39 +729,65 @@ app.put('/api/projects/:id', async (req, res) => {
 
     // Try to find and update by MongoDB ObjectId first, then by string ID
     let result;
+    let searchMethod = '';
+
     try {
+      // First try with ObjectId
+      console.log(`Trying to update project with ObjectId: ${projectId}`);
       result = await database.collection('projects').findOneAndUpdate(
         { _id: new ObjectId(projectId) },
         { $set: { ...updates, updatedAt: new Date().toISOString() } },
         { returnDocument: 'after' }
       );
+      searchMethod = 'ObjectId';
     } catch (e) {
+      console.log(`ObjectId failed, trying string ID: ${e.message}`);
       // If ObjectId fails, try string ID
-      result = await database.collection('projects').findOneAndUpdate(
-        { id: projectId },
-        { $set: { ...updates, updatedAt: new Date().toISOString() } },
-        { returnDocument: 'after' }
-      );
+      try {
+        result = await database.collection('projects').findOneAndUpdate(
+          { id: projectId },
+          { $set: { ...updates, updatedAt: new Date().toISOString() } },
+          { returnDocument: 'after' }
+        );
+        searchMethod = 'string id';
+      } catch (e2) {
+        // Try _id as string
+        result = await database.collection('projects').findOneAndUpdate(
+          { _id: projectId },
+          { $set: { ...updates, updatedAt: new Date().toISOString() } },
+          { returnDocument: 'after' }
+        );
+        searchMethod = 'string _id';
+      }
     }
 
-    if (!result.value) {
-      console.log(`Project ${projectId} not found in MongoDB`);
+    console.log(`Search method used: ${searchMethod}`);
+    console.log(`Result:`, result ? 'Found' : 'Not found');
+    console.log(`Result structure:`, JSON.stringify(result, null, 2));
+
+    // Check both result.value (older driver) and result (newer driver)
+    const updatedDoc = result?.value || result;
+
+    if (!updatedDoc) {
+      console.log(`Project ${projectId} not found in MongoDB using any method`);
       return res.status(404).json({
         success: false,
         message: 'Project not found',
         debug: {
           requestedId: projectId,
+          searchMethod: searchMethod,
+          resultStructure: result ? Object.keys(result) : 'null'
         }
       });
     }
 
     // Format the updated project
     const updatedProject = {
-      ...result.value,
-      id: result.value._id.toString(),
-      subgoals: result.value.subgoals || [],
-      images: result.value.images || [],
-      history: result.value.history || []
+      ...updatedDoc,
+      id: updatedDoc._id.toString(),
+      subgoals: updatedDoc.subgoals || [],
+      images: updatedDoc.images || [],
+      history: updatedDoc.history || []
     };
 
     console.log('Updated project in MongoDB:', {
