@@ -157,27 +157,47 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Root endpoint
-app.get('/', (req, res) => {
-  res.json({
-    status: 'OK',
-    message: 'Arch Kifah Backend API with MongoDB & Auth',
-    timestamp: new Date().toISOString(),
-    cors: 'enabled',
-    database: db ? 'Connected' : 'Disconnected',
-    routes: [
-      'GET /',
-      'GET /api/health',
-      'POST /api/auth/register',
-      'POST /api/auth/login',
-      'GET /api/auth/users',
-      'GET /api/projects',
-      'GET /api/projects/:id',
-      'POST /api/projects',
-      'PUT /api/projects/:id',
-      'DELETE /api/projects/:id'
-    ]
-  });
+// Root endpoint with connection retry
+app.get('/', async (req, res) => {
+  try {
+    let databaseStatus = 'Disconnected';
+
+    try {
+      // Ensure database connection
+      await ensureDbConnection();
+      databaseStatus = 'Connected';
+    } catch (error) {
+      console.error('Database connection error in root endpoint:', error);
+      databaseStatus = 'Disconnected';
+    }
+
+    res.json({
+      status: 'OK',
+      message: 'Arch Kifah Backend API with MongoDB & Auth',
+      timestamp: new Date().toISOString(),
+      cors: 'enabled',
+      database: databaseStatus,
+      routes: [
+        'GET /',
+        'GET /api/health',
+        'POST /api/auth/register',
+        'POST /api/auth/login',
+        'GET /api/auth/users',
+        'GET /api/projects',
+        'GET /api/projects/:id',
+        'POST /api/projects',
+        'PUT /api/projects/:id',
+        'DELETE /api/projects/:id'
+      ]
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'ERROR',
+      message: 'Root endpoint error',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // Handle preflight OPTIONS requests explicitly
