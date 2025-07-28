@@ -57,11 +57,16 @@ app.use((req, res, next) => {
   const origin = req.headers.origin;
   
   // Allow specific origins
-  if (origin === 'https://arch-kifah.vercel.app' || 
-      origin === 'http://localhost:8080' || 
+  if (origin === 'https://arch-kifah.vercel.app' ||
+      origin === 'http://localhost:8080' ||
       origin === 'http://localhost:8081' ||
+      origin === 'http://localhost:5173' ||
+      origin === 'http://localhost:3000' ||
       !origin) {
     res.header('Access-Control-Allow-Origin', origin || '*');
+  } else {
+    // Fallback: allow all origins for CORS issues
+    res.header('Access-Control-Allow-Origin', '*');
   }
   
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
