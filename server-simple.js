@@ -13,28 +13,41 @@ const PORT = process.env.PORT || 3001;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://m7mod:275757@cluster0.lht612f.mongodb.net/arch_kifah?retryWrites=true&w=majority&appName=Cluster0';
 let db;
 let client;
+let mongoConnected = false;
 
 // Connect to MongoDB
 async function connectToMongoDB() {
   try {
+    if (!MONGODB_URI) {
+      throw new Error('MONGODB_URI environment variable is not set');
+    }
+
+    console.log('🔄 Attempting to connect to MongoDB...');
+    console.log('🔗 MongoDB URI:', MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//***:***@')); // Hide credentials in logs
+
     client = new MongoClient(MONGODB_URI);
     await client.connect();
-    db = client.db('arch_kifah');
+    db = client.db(); // Use database from URI
     console.log('✅ Connected to MongoDB successfully');
 
     // Test the connection
     await db.admin().ping();
     console.log('✅ MongoDB ping successful');
 
+    mongoConnected = true;
     return true;
   } catch (error) {
-    console.error('❌ MongoDB connection failed:', error);
+    console.error('❌ MongoDB connection failed:', error.message);
+    console.error('❌ Full error:', error);
+    mongoConnected = false;
     return false;
   }
 }
 
 // Initialize MongoDB connection
-connectToMongoDB();
+connectToMongoDB().catch(err => {
+  console.error('❌ Failed to initialize MongoDB connection:', err);
+});
 
 // MongoDB collections will be used instead of in-memory storage
 console.log('Backend initialized with MongoDB integration');
@@ -133,6 +146,22 @@ app.post('/api/test', (req, res) => {
     success: true,
     message: 'Test endpoint working',
     receivedData: req.body,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Debug endpoint to check environment and MongoDB status
+app.get('/api/debug', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Debug endpoint',
+    environment: {
+      NODE_ENV: process.env.NODE_ENV,
+      MONGODB_URI_SET: !!process.env.MONGODB_URI,
+      MONGODB_URI_LENGTH: process.env.MONGODB_URI ? process.env.MONGODB_URI.length : 0,
+      DB_CONNECTED: !!db,
+      MONGO_CONNECTED: mongoConnected
+    },
     timestamp: new Date().toISOString()
   });
 });

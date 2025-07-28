@@ -1,6 +1,6 @@
 import { MongoClient } from 'mongodb';
 
-const MONGODB_URI = 'mongodb+srv://m7mod:275757@cluster0.lht612f.mongodb.net/arch_kifah?retryWrites=true&w=majority&appName=Cluster0';
+const MONGODB_URI = 'mongodb+srv://m7mod:275757@cluster0.lht612f.mongodb.net/arch-kifah?retryWrites=true&w=majority&appName=Cluster0';
 
 async function testMongoDB() {
   try {
@@ -10,7 +10,7 @@ async function testMongoDB() {
     
     console.log('✅ Connected to MongoDB successfully');
     
-    const db = client.db('arch_kifah');
+    const db = client.db(); // Use database from URI
     await db.admin().ping();
     
     console.log('✅ MongoDB ping successful');
