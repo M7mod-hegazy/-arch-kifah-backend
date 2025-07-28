@@ -212,6 +212,7 @@ app.get('/api/debug', async (req, res) => {
     // Try a fresh connection test
     let testConnection = false;
     let testError = null;
+    let mainConnectionError = null;
 
     if (process.env.MONGODB_URI) {
       try {
@@ -231,6 +232,17 @@ app.get('/api/debug', async (req, res) => {
         testError = error.message;
         console.error('❌ Fresh connection test failed:', error.message);
       }
+
+      // Try to reconnect the main connection if it's not working
+      if (!mongoConnected) {
+        try {
+          console.log('🔄 Attempting to reconnect main MongoDB connection...');
+          await connectToMongoDB();
+        } catch (error) {
+          mainConnectionError = error.message;
+          console.error('❌ Main connection retry failed:', error.message);
+        }
+      }
     }
 
     res.json({
@@ -240,10 +252,12 @@ app.get('/api/debug', async (req, res) => {
         NODE_ENV: process.env.NODE_ENV,
         MONGODB_URI_SET: !!process.env.MONGODB_URI,
         MONGODB_URI_LENGTH: process.env.MONGODB_URI ? process.env.MONGODB_URI.length : 0,
+        MONGODB_URI_PREVIEW: process.env.MONGODB_URI ? process.env.MONGODB_URI.substring(0, 50) + '...' : 'Not set',
         DB_CONNECTED: !!db,
         MONGO_CONNECTED: mongoConnected,
         FRESH_CONNECTION_TEST: testConnection,
-        TEST_ERROR: testError
+        TEST_ERROR: testError,
+        MAIN_CONNECTION_RETRY_ERROR: mainConnectionError
       },
       timestamp: new Date().toISOString()
     });
