@@ -192,7 +192,7 @@ app.get('/api/debug', async (req, res) => {
     if (process.env.MONGODB_URI) {
       try {
         console.log('🔄 Testing fresh MongoDB connection...');
-        const { MongoClient } = require('mongodb');
+        // Use the already imported MongoClient
         const testClient = new MongoClient(process.env.MONGODB_URI, {
           serverSelectionTimeoutMS: 3000,
           connectTimeoutMS: 3000
