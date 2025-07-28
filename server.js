@@ -91,6 +91,18 @@ connectToMongoDB().catch(err => {
   console.error('❌ Failed to initialize MongoDB connection:', err);
 });
 
+// Helper function to ensure database connection for each request
+async function ensureDbConnection() {
+  if (!db || !mongoConnected) {
+    console.log('🔄 Database not connected, attempting to connect...');
+    const success = await connectToMongoDB();
+    if (!success) {
+      throw new Error('Failed to establish database connection');
+    }
+  }
+  return db;
+}
+
 // MongoDB collections will be used instead of in-memory storage
 console.log('Backend initialized with MongoDB integration');
 
@@ -172,15 +184,23 @@ app.get('/', (req, res) => {
 app.get('/api/health', async (req, res) => {
   try {
     let projectsCount = 0;
-    if (db) {
-      projectsCount = await db.collection('projects').countDocuments();
+    let databaseStatus = 'Disconnected';
+
+    try {
+      // Ensure database connection
+      const database = await ensureDbConnection();
+      projectsCount = await database.collection('projects').countDocuments();
+      databaseStatus = 'Connected';
+    } catch (error) {
+      console.error('Database connection error in health check:', error);
+      databaseStatus = 'Disconnected';
     }
 
     res.json({
       status: 'OK',
       message: 'API is healthy',
       timestamp: new Date().toISOString(),
-      database: db ? 'Connected' : 'Disconnected',
+      database: databaseStatus,
       projectsCount: projectsCount
     });
   } catch (error) {
@@ -455,15 +475,11 @@ app.get('/api/projects', async (req, res) => {
   try {
     console.log('GET /api/projects - Fetching shared projects from MongoDB');
 
-    if (!db) {
-      return res.status(500).json({
-        success: false,
-        message: 'Database connection not available'
-      });
-    }
+    // Ensure database connection
+    const database = await ensureDbConnection();
 
     // Get all projects from MongoDB (shared across all users)
-    const projects = await db.collection('projects').find({}).toArray();
+    const projects = await database.collection('projects').find({}).toArray();
 
     // Format projects with proper ID field
     const formattedProjects = projects.map(project => ({
