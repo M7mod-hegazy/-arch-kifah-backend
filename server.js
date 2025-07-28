@@ -724,24 +724,20 @@ app.put('/api/projects/:id', async (req, res) => {
 
     console.log('Updates received keys:', Object.keys(updates));
 
-    if (!db) {
-      return res.status(500).json({
-        success: false,
-        message: 'Database connection not available'
-      });
-    }
+    // Ensure database connection
+    const database = await ensureDbConnection();
 
     // Try to find and update by MongoDB ObjectId first, then by string ID
     let result;
     try {
-      result = await db.collection('projects').findOneAndUpdate(
+      result = await database.collection('projects').findOneAndUpdate(
         { _id: new ObjectId(projectId) },
         { $set: { ...updates, updatedAt: new Date().toISOString() } },
         { returnDocument: 'after' }
       );
     } catch (e) {
       // If ObjectId fails, try string ID
-      result = await db.collection('projects').findOneAndUpdate(
+      result = await database.collection('projects').findOneAndUpdate(
         { id: projectId },
         { $set: { ...updates, updatedAt: new Date().toISOString() } },
         { returnDocument: 'after' }
