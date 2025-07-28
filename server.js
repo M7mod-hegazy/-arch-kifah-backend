@@ -30,14 +30,11 @@ async function connectToMongoDB() {
     let connectionString = MONGODB_URI;
     console.log('🔄 Using original connection string format');
 
-    // Try multiple connection strategies for Vercel
+    // Use the same options that work in the debug test
     const connectionOptions = {
-      serverSelectionTimeoutMS: 5000, // Shorter timeout for Vercel
-      connectTimeoutMS: 5000,
-      socketTimeoutMS: 5000,
-      maxPoolSize: 1, // Limit connections for serverless
-      retryWrites: true,
-      w: 'majority'
+      serverSelectionTimeoutMS: 3000,
+      connectTimeoutMS: 3000,
+      maxPoolSize: 1
     };
 
     console.log('🔄 Attempting client.connect() with options:', JSON.stringify(connectionOptions));
@@ -91,6 +88,11 @@ app.use((req, res, next) => {
     // Fallback: allow all origins for CORS issues
     res.header('Access-Control-Allow-Origin', '*');
   }
+
+  // Additional CORS headers for all requests
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.header('Access-Control-Max-Age', '86400');
   
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
@@ -103,9 +105,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Body parsing with error handling - increased limit for images
+// Body parsing with error handling - increased limit for large projects
 app.use(express.json({
-  limit: '10mb', // Increased for image uploads
+  limit: '50mb', // Increased for large projects with images
   verify: (req, res, buf) => {
     try {
       JSON.parse(buf);
@@ -119,7 +121,7 @@ app.use(express.json({
     }
   }
 }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Root endpoint
 app.get('/', (req, res) => {
