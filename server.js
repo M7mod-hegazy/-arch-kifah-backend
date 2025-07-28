@@ -26,17 +26,26 @@ async function connectToMongoDB() {
     console.log('🔗 MongoDB URI length:', MONGODB_URI.length);
     console.log('🔗 MongoDB URI preview:', MONGODB_URI.substring(0, 30) + '...');
 
-    // Try connection with timeout options for Vercel
-    client = new MongoClient(MONGODB_URI, {
-      serverSelectionTimeoutMS: 10000, // 10 seconds
-      connectTimeoutMS: 10000,
-      socketTimeoutMS: 10000,
-    });
+    // Try multiple connection strategies for Vercel
+    const connectionOptions = {
+      serverSelectionTimeoutMS: 5000, // Shorter timeout for Vercel
+      connectTimeoutMS: 5000,
+      socketTimeoutMS: 5000,
+      maxPoolSize: 1, // Limit connections for serverless
+      retryWrites: true,
+      w: 'majority'
+    };
 
-    console.log('🔄 Attempting client.connect()...');
+    console.log('🔄 Attempting client.connect() with options:', JSON.stringify(connectionOptions));
+    client = new MongoClient(MONGODB_URI, connectionOptions);
+
     await client.connect();
     console.log('✅ Client connected successfully');
-    db = client.db('arch-kifah'); // Explicitly specify database name
+
+    // Try different database name strategies
+    let dbName = 'arch-kifah';
+    console.log('🔄 Attempting to select database:', dbName);
+    db = client.db(dbName);
     console.log('✅ Connected to MongoDB successfully');
 
     // Test the connection
