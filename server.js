@@ -712,13 +712,14 @@ app.put('/api/projects/:id', async (req, res) => {
     console.log(`PUT /api/projects/${projectId} - Updating project in MongoDB`);
     console.log('Request size:', requestSize, 'bytes');
 
-    // Check if request is too large for Vercel (4.5MB limit)
-    if (requestSize > 4 * 1024 * 1024) { // 4MB threshold
+    // Check if request is too large for Vercel (2MB limit for better performance)
+    if (requestSize > 2 * 1024 * 1024) { // 2MB threshold
       return res.status(413).json({
         success: false,
-        message: 'Request too large. Please reduce image sizes or remove some images.',
+        message: 'حجم الطلب كبير جداً. يرجى تقليل حجم الصور أو إزالة بعضها. الحد الأقصى المسموح: 2 ميجابايت',
         requestSize: requestSize,
-        maxSize: '4MB'
+        maxSize: '2MB',
+        arabicMessage: 'حجم الطلب كبير جداً. يرجى تقليل حجم الصور أو إزالة بعضها.'
       });
     }
 
