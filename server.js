@@ -26,6 +26,14 @@ async function connectToMongoDB() {
     console.log('🔗 MongoDB URI length:', MONGODB_URI.length);
     console.log('🔗 MongoDB URI preview:', MONGODB_URI.substring(0, 30) + '...');
 
+    // Try alternative connection string format for Vercel
+    let connectionString = MONGODB_URI;
+    if (!connectionString.includes('/arch-kifah')) {
+      // Add database name if not present
+      connectionString = connectionString.replace('mongodb.net/', 'mongodb.net/arch-kifah');
+      console.log('🔄 Modified connection string to include database name');
+    }
+
     // Try multiple connection strategies for Vercel
     const connectionOptions = {
       serverSelectionTimeoutMS: 5000, // Shorter timeout for Vercel
@@ -37,7 +45,8 @@ async function connectToMongoDB() {
     };
 
     console.log('🔄 Attempting client.connect() with options:', JSON.stringify(connectionOptions));
-    client = new MongoClient(MONGODB_URI, connectionOptions);
+    console.log('🔄 Using connection string:', connectionString.substring(0, 50) + '...');
+    client = new MongoClient(connectionString, connectionOptions);
 
     await client.connect();
     console.log('✅ Client connected successfully');
