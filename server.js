@@ -15,53 +15,75 @@ let db;
 let client;
 let mongoConnected = false;
 
-// Connect to MongoDB
+// Connect to MongoDB with retry logic
 async function connectToMongoDB() {
-  try {
-    if (!MONGODB_URI) {
-      throw new Error('MONGODB_URI environment variable is not set');
+  const maxRetries = 3;
+  let retryCount = 0;
+
+  while (retryCount < maxRetries) {
+    try {
+      if (!MONGODB_URI) {
+        throw new Error('MONGODB_URI environment variable is not set');
+      }
+
+      console.log(`🔄 Attempting to connect to MongoDB (attempt ${retryCount + 1}/${maxRetries})...`);
+      console.log('🔗 MongoDB URI length:', MONGODB_URI.length);
+      console.log('🔗 MongoDB URI preview:', MONGODB_URI.substring(0, 30) + '...');
+
+      // Use the same options that work in the debug test
+      const connectionOptions = {
+        serverSelectionTimeoutMS: 5000,
+        connectTimeoutMS: 5000,
+        maxPoolSize: 1,
+        retryWrites: true,
+        w: 'majority'
+      };
+
+      console.log('🔄 Using connection options:', JSON.stringify(connectionOptions));
+      client = new MongoClient(MONGODB_URI, connectionOptions);
+
+      await client.connect();
+      console.log('✅ Client connected successfully');
+
+      // Always use explicit database name
+      console.log('🔄 Selecting database: arch-kifah');
+      db = client.db('arch-kifah');
+      console.log('🔄 Database selected successfully');
+
+      // Test the connection with a simple operation
+      await db.admin().ping();
+      console.log('✅ MongoDB ping successful');
+
+      // Test collection access
+      const projectsCount = await db.collection('projects').countDocuments();
+      console.log(`✅ Projects collection accessible, count: ${projectsCount}`);
+
+      mongoConnected = true;
+      return true;
+    } catch (error) {
+      retryCount++;
+      console.error(`❌ MongoDB connection attempt ${retryCount} failed:`, error.message);
+
+      if (client) {
+        try {
+          await client.close();
+        } catch (closeError) {
+          console.error('Error closing client:', closeError.message);
+        }
+      }
+
+      if (retryCount < maxRetries) {
+        console.log(`⏳ Retrying in 2 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } else {
+        console.error('❌ All MongoDB connection attempts failed');
+        mongoConnected = false;
+        return false;
+      }
     }
-
-    console.log('🔄 Attempting to connect to MongoDB...');
-    console.log('🔗 MongoDB URI length:', MONGODB_URI.length);
-    console.log('🔗 MongoDB URI preview:', MONGODB_URI.substring(0, 30) + '...');
-
-    // Try original connection string without modification
-    let connectionString = MONGODB_URI;
-    console.log('🔄 Using original connection string format');
-
-    // Use the same options that work in the debug test
-    const connectionOptions = {
-      serverSelectionTimeoutMS: 3000,
-      connectTimeoutMS: 3000,
-      maxPoolSize: 1
-    };
-
-    console.log('🔄 Attempting client.connect() with options:', JSON.stringify(connectionOptions));
-    console.log('🔄 Using connection string:', connectionString.substring(0, 50) + '...');
-    client = new MongoClient(connectionString, connectionOptions);
-
-    await client.connect();
-    console.log('✅ Client connected successfully');
-
-    // Always use explicit database name
-    console.log('🔄 Selecting database: arch-kifah');
-    db = client.db('arch-kifah');
-    console.log('🔄 Database selected successfully');
-    console.log('✅ Connected to MongoDB successfully');
-
-    // Test the connection
-    await db.admin().ping();
-    console.log('✅ MongoDB ping successful');
-
-    mongoConnected = true;
-    return true;
-  } catch (error) {
-    console.error('❌ MongoDB connection failed:', error.message);
-    console.error('❌ Full error:', error);
-    mongoConnected = false;
-    return false;
   }
+
+  return false;
 }
 
 // Initialize MongoDB connection
