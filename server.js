@@ -36,7 +36,7 @@ async function connectToMongoDB() {
     console.log('🔄 Attempting client.connect()...');
     await client.connect();
     console.log('✅ Client connected successfully');
-    db = client.db(); // Use database from URI
+    db = client.db('arch-kifah'); // Explicitly specify database name
     console.log('✅ Connected to MongoDB successfully');
 
     // Test the connection
