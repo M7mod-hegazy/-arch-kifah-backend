@@ -183,19 +183,54 @@ app.post('/api/test', (req, res) => {
 });
 
 // Debug endpoint to check environment and MongoDB status
-app.get('/api/debug', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Debug endpoint',
-    environment: {
-      NODE_ENV: process.env.NODE_ENV,
-      MONGODB_URI_SET: !!process.env.MONGODB_URI,
-      MONGODB_URI_LENGTH: process.env.MONGODB_URI ? process.env.MONGODB_URI.length : 0,
-      DB_CONNECTED: !!db,
-      MONGO_CONNECTED: mongoConnected
-    },
-    timestamp: new Date().toISOString()
-  });
+app.get('/api/debug', async (req, res) => {
+  try {
+    // Try a fresh connection test
+    let testConnection = false;
+    let testError = null;
+
+    if (process.env.MONGODB_URI) {
+      try {
+        console.log('🔄 Testing fresh MongoDB connection...');
+        const { MongoClient } = require('mongodb');
+        const testClient = new MongoClient(process.env.MONGODB_URI, {
+          serverSelectionTimeoutMS: 3000,
+          connectTimeoutMS: 3000
+        });
+
+        await testClient.connect();
+        await testClient.db('arch-kifah').admin().ping();
+        testConnection = true;
+        await testClient.close();
+        console.log('✅ Fresh connection test successful');
+      } catch (error) {
+        testError = error.message;
+        console.error('❌ Fresh connection test failed:', error.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Debug endpoint',
+      environment: {
+        NODE_ENV: process.env.NODE_ENV,
+        MONGODB_URI_SET: !!process.env.MONGODB_URI,
+        MONGODB_URI_LENGTH: process.env.MONGODB_URI ? process.env.MONGODB_URI.length : 0,
+        DB_CONNECTED: !!db,
+        MONGO_CONNECTED: mongoConnected,
+        FRESH_CONNECTION_TEST: testConnection,
+        TEST_ERROR: testError
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Debug endpoint error',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // ===== AUTHENTICATION ENDPOINTS =====
