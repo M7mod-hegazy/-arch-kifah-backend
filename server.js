@@ -187,7 +187,10 @@ app.get('/', async (req, res) => {
         'GET /api/projects/:id',
         'POST /api/projects',
         'PUT /api/projects/:id',
-        'DELETE /api/projects/:id'
+        'DELETE /api/projects/:id',
+        'GET /api/fixed-goals',
+        'POST /api/fixed-goals',
+        'DELETE /api/fixed-goals/:id'
       ]
     });
   } catch (error) {
@@ -862,7 +865,127 @@ app.delete('/api/projects/:id', async (req, res) => {
   }
 });
 
-// 404 handler
+// ===== FIXED GOALS API ENDPOINTS =====
+
+// GET /api/fixed-goals - Get all fixed goals (shared globally)
+app.get('/api/fixed-goals', async (req, res) => {
+  try {
+    await ensureDbConnection();
+    const collection = db.collection('fixed_goals');
+
+    const fixedGoals = await collection.find({}).sort({ createdAt: -1 }).toArray();
+
+    // Convert MongoDB _id to id for frontend compatibility
+    const formattedGoals = fixedGoals.map(goal => ({
+      id: goal._id.toString(),
+      title: goal.title,
+      description: goal.description || '',
+      status: goal.status || 'waiting',
+      isFixed: goal.isFixed !== false,
+      createdAt: goal.createdAt,
+      updatedAt: goal.updatedAt
+    }));
+
+    res.json({
+      success: true,
+      data: formattedGoals,
+      count: formattedGoals.length
+    });
+  } catch (error) {
+    console.error('Error fetching fixed goals:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch fixed goals',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/fixed-goals - Create a new fixed goal
+app.post('/api/fixed-goals', async (req, res) => {
+  try {
+    const { title, description, status = 'waiting', isFixed = true } = req.body;
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Goal title is required'
+      });
+    }
+
+    await ensureDbConnection();
+    const collection = db.collection('fixed_goals');
+
+    const newGoal = {
+      title: title.trim(),
+      description: description?.trim() || '',
+      status,
+      isFixed,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const result = await collection.insertOne(newGoal);
+
+    const createdGoal = {
+      id: result.insertedId.toString(),
+      ...newGoal
+    };
+
+    res.status(201).json({
+      success: true,
+      data: createdGoal,
+      message: 'Fixed goal created successfully'
+    });
+  } catch (error) {
+    console.error('Error creating fixed goal:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create fixed goal',
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/fixed-goals/:id - Delete a fixed goal
+app.delete('/api/fixed-goals/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid goal ID'
+      });
+    }
+
+    await ensureDbConnection();
+    const collection = db.collection('fixed_goals');
+
+    const result = await collection.deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Fixed goal not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Fixed goal deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting fixed goal:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete fixed goal',
+      error: error.message
+    });
+  }
+});
+
+// 404 handler - must be after all routes
 app.use('*', (req, res) => {
   res.status(404).json({
     success: false,

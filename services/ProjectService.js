@@ -44,7 +44,8 @@ export class ProjectService {
           type: 'created',
           description: 'تم إنشاء المشروع',
           timestamp: now,
-          userId: projectData.createdBy
+          userId: projectData.userId || projectData.createdBy || 'unknown',
+          userName: projectData.userName || projectData.createdBy || 'مستخدم غير معروف'
         }]
       };
 
@@ -137,7 +138,8 @@ export class ProjectService {
             type: this.getHistoryType(updateData),
             description: this.getHistoryDescription(updateData, currentProject),
             timestamp: now,
-            userId: updateData.updatedBy || 'unknown',
+            userId: updateData.userId || updateData.updatedBy || 'unknown',
+            userName: updateData.userName || updateData.updatedBy || 'مستخدم غير معروف',
             changes: this.getDetailedChanges(updateData, currentProject)
           };
 
