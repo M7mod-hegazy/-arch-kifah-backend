@@ -190,7 +190,12 @@ app.get('/', async (req, res) => {
         'DELETE /api/projects/:id',
         'GET /api/fixed-goals',
         'POST /api/fixed-goals',
-        'DELETE /api/fixed-goals/:id'
+        'DELETE /api/fixed-goals/:id',
+        'GET /api/notifications',
+        'POST /api/notifications',
+        'PUT /api/notifications/:id/read',
+        'PUT /api/notifications/mark-all-read',
+        'DELETE /api/notifications'
       ]
     });
   } catch (error) {
@@ -980,6 +985,206 @@ app.delete('/api/fixed-goals/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete fixed goal',
+      error: error.message
+    });
+  }
+});
+
+// ===== NOTIFICATIONS API ENDPOINTS =====
+
+// GET /api/notifications - Get all notifications (shared globally, latest 10)
+app.get('/api/notifications', async (req, res) => {
+  try {
+    await ensureDbConnection();
+    const collection = db.collection('notifications');
+
+    const notifications = await collection.find({}).sort({ createdAt: -1 }).limit(10).toArray();
+
+    // Convert MongoDB _id to id for frontend compatibility
+    const formattedNotifications = notifications.map(notification => ({
+      id: notification._id.toString(),
+      type: notification.type,
+      title: notification.title,
+      message: notification.message || '',
+      projectId: notification.projectId,
+      userId: notification.userId,
+      userName: notification.userName,
+      date: notification.date,
+      read: notification.read || false,
+      details: notification.details,
+      redirectTo: notification.redirectTo,
+      createdAt: notification.createdAt,
+      updatedAt: notification.updatedAt
+    }));
+
+    res.json({
+      success: true,
+      data: formattedNotifications,
+      count: formattedNotifications.length
+    });
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch notifications',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/notifications - Create a new notification
+app.post('/api/notifications', async (req, res) => {
+  try {
+    const { type, title, message, projectId, userId, userName, details, redirectTo } = req.body;
+
+    if (!type || !title || !userId || !userName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Type, title, userId, and userName are required'
+      });
+    }
+
+    await ensureDbConnection();
+    const collection = db.collection('notifications');
+
+    const newNotification = {
+      type,
+      title,
+      message: message || '',
+      projectId,
+      userId,
+      userName,
+      date: new Date().toISOString(),
+      read: false,
+      details,
+      redirectTo,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const result = await collection.insertOne(newNotification);
+
+    // Keep only latest 10 notifications - cleanup old ones
+    const totalCount = await collection.countDocuments();
+    if (totalCount > 10) {
+      const oldNotifications = await collection.find({}).sort({ createdAt: 1 }).limit(totalCount - 10).toArray();
+      const oldIds = oldNotifications.map(n => n._id);
+      await collection.deleteMany({ _id: { $in: oldIds } });
+    }
+
+    const createdNotification = {
+      id: result.insertedId.toString(),
+      ...newNotification
+    };
+
+    res.status(201).json({
+      success: true,
+      data: createdNotification,
+      message: 'Notification created successfully'
+    });
+  } catch (error) {
+    console.error('Error creating notification:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create notification',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/notifications/:id/read - Mark notification as read
+app.put('/api/notifications/:id/read', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid notification ID'
+      });
+    }
+
+    await ensureDbConnection();
+    const collection = db.collection('notifications');
+
+    const result = await collection.updateOne(
+      { _id: new ObjectId(id) },
+      {
+        $set: {
+          read: true,
+          updatedAt: new Date().toISOString()
+        }
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Notification not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Notification marked as read'
+    });
+  } catch (error) {
+    console.error('Error marking notification as read:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to mark notification as read',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/notifications/mark-all-read - Mark all notifications as read
+app.put('/api/notifications/mark-all-read', async (req, res) => {
+  try {
+    await ensureDbConnection();
+    const collection = db.collection('notifications');
+
+    const result = await collection.updateMany(
+      { read: { $ne: true } },
+      {
+        $set: {
+          read: true,
+          updatedAt: new Date().toISOString()
+        }
+      }
+    );
+
+    res.json({
+      success: true,
+      message: `Marked ${result.modifiedCount} notifications as read`
+    });
+  } catch (error) {
+    console.error('Error marking all notifications as read:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to mark all notifications as read',
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/notifications - Clear all notifications
+app.delete('/api/notifications', async (req, res) => {
+  try {
+    await ensureDbConnection();
+    const collection = db.collection('notifications');
+
+    const result = await collection.deleteMany({});
+
+    res.json({
+      success: true,
+      message: `Cleared ${result.deletedCount} notifications`
+    });
+  } catch (error) {
+    console.error('Error clearing notifications:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to clear notifications',
       error: error.message
     });
   }
