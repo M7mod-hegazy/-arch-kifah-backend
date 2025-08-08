@@ -5,7 +5,8 @@
       "src": "server.js",
       "use": "@vercel/node",
       "config": {
-        "runtime": "nodejs22.x"
+        "runtime": "nodejs22.x",
+        "maxDuration": 30
       }
     }
   ],
@@ -14,5 +15,10 @@
       "src": "/(.*)",
       "dest": "/server.js"
     }
-  ]
+  ],
+  "functions": {
+    "server.js": {
+      "maxDuration": 30
+    }
+  }
 }
