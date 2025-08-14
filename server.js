@@ -207,6 +207,10 @@ app.get('/', async (req, res) => {
         'POST /api/general-expenses',
         'PUT /api/general-expenses/:id',
         'DELETE /api/general-expenses/:id',
+        'GET /api/general-revenues',
+        'POST /api/general-revenues',
+        'PUT /api/general-revenues/:id',
+        'DELETE /api/general-revenues/:id',
         'GET /api/drawings',
         'POST /api/drawings',
         'PUT /api/drawings/:id',
@@ -2567,6 +2571,208 @@ app.delete('/api/general-expenses/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete general expense',
+      error: error.message
+    });
+  }
+});
+
+// ===== GENERAL REVENUES API ENDPOINTS =====
+
+// GET /api/general-revenues - Get all general revenues
+app.get('/api/general-revenues', async (req, res) => {
+  try {
+    await ensureDbConnection();
+    const collection = db.collection('general_revenues');
+
+    const { start, end, id } = req.query;
+
+    let query = {};
+
+    // Handle single revenue by ID
+    if (id) {
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid revenue ID'
+        });
+      }
+      query = { _id: new ObjectId(id) };
+    }
+
+    // Handle date range filtering
+    if (start && end) {
+      query = {
+        ...query,
+        date: {
+          $gte: start,
+          $lte: end
+        }
+      };
+    }
+
+    const revenues = await collection.find(query).sort({ createdAt: -1 }).toArray();
+
+    // Convert MongoDB _id to id for frontend compatibility
+    const formattedRevenues = revenues.map(revenue => ({
+      ...revenue,
+      id: revenue._id.toString(),
+      _id: undefined
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: formattedRevenues,
+      count: formattedRevenues.length
+    });
+  } catch (error) {
+    console.error('Error fetching general revenues:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch general revenues',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/general-revenues - Create new general revenue
+app.post('/api/general-revenues', async (req, res) => {
+  try {
+    await ensureDbConnection();
+    const collection = db.collection('general_revenues');
+
+    const revenueData = req.body;
+
+    // Validate required fields
+    if (!revenueData.amount || !revenueData.description || !revenueData.date) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: amount, description, date'
+      });
+    }
+
+    const newRevenue = {
+      ...revenueData,
+      amount: Number(revenueData.amount),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const result = await collection.insertOne(newRevenue);
+
+    // Return the created revenue with id
+    const createdRevenue = {
+      ...newRevenue,
+      id: result.insertedId.toString(),
+      _id: undefined
+    };
+
+    res.status(201).json({
+      success: true,
+      data: createdRevenue,
+      message: 'General revenue created successfully'
+    });
+  } catch (error) {
+    console.error('Error creating general revenue:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create general revenue',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/general-revenues/:id - Update general revenue
+app.put('/api/general-revenues/:id', async (req, res) => {
+  try {
+    await ensureDbConnection();
+    const collection = db.collection('general_revenues');
+
+    const { id } = req.params;
+    const updateData = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid revenue ID'
+      });
+    }
+
+    const updatedRevenue = {
+      ...updateData,
+      amount: Number(updateData.amount),
+      updatedAt: new Date().toISOString()
+    };
+
+    const result = await collection.findOneAndUpdate(
+      { _id: new ObjectId(id) },
+      { $set: updatedRevenue },
+      { returnDocument: 'after' }
+    );
+
+    if (!result.value) {
+      return res.status(404).json({
+        success: false,
+        message: 'General revenue not found'
+      });
+    }
+
+    // Format the response
+    const formattedRevenue = {
+      ...result.value,
+      id: result.value._id.toString(),
+      _id: undefined
+    };
+
+    res.status(200).json({
+      success: true,
+      data: formattedRevenue,
+      message: 'General revenue updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating general revenue:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update general revenue',
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/general-revenues/:id - Delete general revenue
+app.delete('/api/general-revenues/:id', async (req, res) => {
+  try {
+    await ensureDbConnection();
+    const collection = db.collection('general_revenues');
+
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid revenue ID'
+      });
+    }
+
+    const result = await collection.findOneAndDelete({
+      _id: new ObjectId(id)
+    });
+
+    if (!result.value) {
+      return res.status(404).json({
+        success: false,
+        message: 'General revenue not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'General revenue deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting general revenue:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete general revenue',
       error: error.message
     });
   }
