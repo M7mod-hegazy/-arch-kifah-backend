@@ -2579,7 +2579,9 @@ app.delete('/api/general-expenses/:id', async (req, res) => {
 // ===== GENERAL REVENUES API ENDPOINTS =====
 
 // GET /api/general-revenues - Get all general revenues
+console.log('Registering GET /api/general-revenues route...');
 app.get('/api/general-revenues', async (req, res) => {
+  console.log('GET /api/general-revenues route hit!');
   try {
     await ensureDbConnection();
     const collection = db.collection('general_revenues');
@@ -2635,7 +2637,9 @@ app.get('/api/general-revenues', async (req, res) => {
 });
 
 // POST /api/general-revenues - Create new general revenue
+console.log('Registering POST /api/general-revenues route...');
 app.post('/api/general-revenues', async (req, res) => {
+  console.log('POST /api/general-revenues route hit!');
   try {
     await ensureDbConnection();
     const collection = db.collection('general_revenues');
