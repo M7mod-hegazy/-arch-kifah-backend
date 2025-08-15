@@ -214,7 +214,9 @@ app.get('/', async (req, res) => {
         'GET /api/drawings',
         'POST /api/drawings',
         'PUT /api/drawings/:id',
-        'DELETE /api/drawings/:id'
+        'DELETE /api/drawings/:id',
+        'GET /api/backup',
+        'POST /api/restore'
       ]
     });
   } catch (error) {
@@ -2777,6 +2779,124 @@ app.delete('/api/general-revenues/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete general revenue',
+      error: error.message
+    });
+  }
+});
+
+// ===== DATABASE BACKUP & RESTORE API ENDPOINTS =====
+
+// GET /api/backup - Download complete database backup
+app.get('/api/backup', async (req, res) => {
+  try {
+    await ensureDbConnection();
+
+    console.log('Creating database backup...');
+
+    // Get all collections data
+    const collections = ['projects', 'project_families', 'fixed_goals', 'general_expenses', 'general_revenues', 'drawings'];
+    const backup = {
+      timestamp: new Date().toISOString(),
+      version: '1.0',
+      data: {}
+    };
+
+    for (const collectionName of collections) {
+      try {
+        const collection = db.collection(collectionName);
+        const data = await collection.find({}).toArray();
+        backup.data[collectionName] = data;
+        console.log(`Backed up ${data.length} documents from ${collectionName}`);
+      } catch (error) {
+        console.warn(`Failed to backup collection ${collectionName}:`, error.message);
+        backup.data[collectionName] = [];
+      }
+    }
+
+    // Set headers for file download
+    const filename = `kifah_backup_${new Date().toISOString().split('T')[0]}.json`;
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    res.status(200).json(backup);
+    console.log('Database backup created successfully');
+  } catch (error) {
+    console.error('Error creating backup:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create backup',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/restore - Restore database from backup
+app.post('/api/restore', async (req, res) => {
+  try {
+    await ensureDbConnection();
+
+    const backupData = req.body;
+
+    // Validate backup format
+    if (!backupData.data || typeof backupData.data !== 'object') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid backup format'
+      });
+    }
+
+    console.log('Starting database restore...');
+
+    const results = {};
+    const collections = Object.keys(backupData.data);
+
+    for (const collectionName of collections) {
+      try {
+        const collection = db.collection(collectionName);
+        const data = backupData.data[collectionName];
+
+        if (!Array.isArray(data)) {
+          console.warn(`Skipping ${collectionName}: not an array`);
+          continue;
+        }
+
+        // Clear existing data
+        await collection.deleteMany({});
+
+        // Insert backup data
+        if (data.length > 0) {
+          await collection.insertMany(data);
+        }
+
+        results[collectionName] = {
+          restored: data.length,
+          success: true
+        };
+
+        console.log(`Restored ${data.length} documents to ${collectionName}`);
+      } catch (error) {
+        console.error(`Failed to restore collection ${collectionName}:`, error);
+        results[collectionName] = {
+          restored: 0,
+          success: false,
+          error: error.message
+        };
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Database restore completed',
+      results: results,
+      timestamp: new Date().toISOString()
+    });
+
+    console.log('Database restore completed');
+  } catch (error) {
+    console.error('Error restoring backup:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to restore backup',
       error: error.message
     });
   }
